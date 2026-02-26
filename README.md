@@ -1,106 +1,68 @@
-# CAPTCHA Breaker: Deep Learning Approach
+# CAPTCHA Breaker – End-to-End Multi-Character CNN
+Deep learning system for breaking 4-character text CAPTCHAs using convolutional neural networks.
+This repository implements two production-style pipelines:
+1. Segmentation + CNN classifier (OpenCV + CNN)
+2. End-to-end multi-character CNN (PyTorch, no segmentation)
+The second approach removes rule-based contour detection and directly predicts all characters from the full image.
 
-A deep learning project that demonstrates how traditional text-based CAPTCHAs can be automatically solved using Convolutional Neural Networks (CNNs). This project implements the solution in both **TensorFlow/Keras** and **PyTorch** to compare the two popular deep learning frameworks.
+## End-to-End Model
 
-## 🎯 Project Overview
+**Input:** grayscale CAPTCHA image `(1×24×72)`  
+**Output:** full 4-character string  
 
-CAPTCHAs (Completely Automated Public Turing test to tell Computers and Humans Apart) were designed to distinguish humans from bots. However, with advances in computer vision and deep learning, many traditional CAPTCHAs can now be solved programmatically. This project explores the effectiveness of CNNs in breaking simple text-based CAPTCHAs.
+The model predicts:
+````
+(batch_size, 4, n_classes)
+````
+A prediction is correct only if **all 4 characters match**.
 
-## 🚀 Features
+## Architecture
 
-- **Automated character segmentation** using OpenCV contour detection
-- **CNN-based character recognition** with >95% accuracy
-- **Dual implementation**: Both TensorFlow/Keras and PyTorch versions
-- **End-to-end pipeline**: From raw CAPTCHA images to predicted text
-- **Comprehensive preprocessing**: Image transformation, feature extraction, and label encoding
+- 3 Convolution blocks (Conv → BatchNorm → ReLU → MaxPool)
+- Zone-wise convolution layer
+- 1×1 convolution for channel reduction
+- Reshape → 4 character positions
+Key idea:
+Use convolutional structure instead of flattening, preserving spatial locality for character positions.
 
-## 🏗️ Architecture
+## Engineering Highlights
 
-The CNN architecture consists of:
-- **2 Convolutional blocks** (Conv2D + ReLU + MaxPooling)
-- **Flatten layer** to convert 2D features to 1D
-- **2 Fully-connected layers** for classification
-- **Softmax output** for character probability distribution
+### Custom Multi-Character Loss
 
+```python
+cross_entropy(pred_logits.flatten(0,1), labels.flatten())
 ```
-Input (20×20×1) 
-    ↓
-Conv2D (20 filters, 5×5) + ReLU + MaxPool
-    ↓
-Conv2D (50 filters, 5×5) + ReLU + MaxPool
-    ↓
-Flatten (1250 features)
-    ↓
-Dense (500 units) + ReLU
-    ↓
-Dense (n_classes) + Softmax
-    ↓
-Output (character probabilities)
-```
+- Computes cross entropy across all character positions
+- Enables joint optimization of full CAPTCHA prediction
 
-## 📊 Pipeline
+### Data Augmentation
 
-1. **Load CAPTCHA images** from dataset
-2. **Preprocess images**: Convert to grayscale, add padding
-3. **Extract characters**: Use contour detection to isolate individual characters
-4. **Feature extraction**: Resize characters to 20×20 pixels
-5. **Train CNN model**: Learn character patterns
-6. **Predict**: Run full CAPTCHAs through the pipeline
-7. **Evaluate**: Measure accuracy on test set
+Using `torchvision.transforms.RandomAffine`:
+- Rotation (±5°)
+- Translation (10%)
+- Scaling (0.9–1.1)
+- Shearing (±5°)
+- Pixel rescaling + inversion
+Improves robustness and reduces overfitting.
 
-## 🛠️ Installation
+## Performance
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/captcha-breaker.git
-cd captcha-breaker
+- Training Accuracy: ~95%+
+- Validation Accuracy: ~90%+
+- **Test Accuracy: 93.3%**
+- 1064 / 1140 CAPTCHAs fully recognized
 
-# Install dependencies
-pip install numpy opencv-python imutils scikit-learn matplotlib
+Model trained with:
 
-# For TensorFlow implementation
-pip install tensorflow
+- AdamW optimizer
+- Batch normalization
+- 200 epochs
+- On-the-fly augmentation
 
-# For PyTorch implementation
-pip install torch torchvision
-```
+## Baseline: Segmentation + CNN
 
-## 📦 Dataset
-
-The project uses a dataset of 4-character CAPTCHAs. Each image filename contains the ground truth text (e.g., `2A2X.png`).
-
-```bash
-# Extract the dataset
-tar -xJf captcha-images.tar.xz
-```
-
-## 🎮 Usage
-
-### TensorFlow/Keras Version
-
-```bash
-jupyter notebook Breaking-CAPTCHAS-TensorFlow.ipynb
-```
-
-### PyTorch Version
-
-```bash
-jupyter notebook Breaking-CAPTCHAS-Pytorch.ipynb
-```
-
-Both notebooks include:
-- Data preprocessing and visualization
-- Model training with validation
-- Performance evaluation
-- Sample predictions on test CAPTCHAs
-
-## 📈 Results
-
-| Metric | TensorFlow | PyTorch |
-|--------|-----------|---------|
-| Training Accuracy | ~98% | ~98% |
-| Validation Accuracy | ~96% | ~96% |
-| Test Accuracy | ~95% | ~95% |
-| Training Time (10 epochs) | ~2-3 min | ~2-3 min |
-
-*Results may vary based on hardware and random initialization*
+Earlier version uses:
+- OpenCV contour detection
+- Character-level CNN classifier
+- TensorFlow & PyTorch implementations
+Achieves ~95% character-level accuracy.
